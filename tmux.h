@@ -3526,6 +3526,40 @@ int		 window_copy_get_current_offset(struct window_pane *, u_int *,
 		     u_int *);
 char		*window_copy_get_hyperlink(struct window_pane *, u_int, u_int);
 
+/* win-slide-anim.c */
+
+enum win_slide_anim_axis {
+	WIN_SLIDE_ANIM_HORIZONTAL = 0,
+	WIN_SLIDE_ANIM_VERTICAL
+};
+
+/* left/up and right/down depends on the `win_slide_anim_axis` */
+enum win_slide_anim_direction {
+	WIN_SLIDE_ANIM_LEFT_OR_UP = 0,
+	WIN_SLIDE_ANIM_RIGHT_OR_DOWN
+};
+
+enum win_slide_anim_ease_function {
+	WIN_SLIDE_ANIM_EASE_IN_OUT_CUBIC = 0,
+	WIN_SLIDE_ANIM_EASE_LINEAR,
+	WIN_SLIDE_ANIM_EASE_IN_OUT_SINE,
+	WIN_SLIDE_ANIM_EASE_IN_OUT_QUAD,
+	WIN_SLIDE_ANIM_EASE_IN_OUT_QUART,
+	WIN_SLIDE_ANIM_EASE_IN_OUT_QUINT,
+	WIN_SLIDE_ANIM_EASE_IN_OUT_EXPO,
+	WIN_SLIDE_ANIM_EASE_IN_OUT_CIRC
+};
+
+#define WIN_SLIDE_ANIM_DEFAULT_ENABLED 0
+#define WIN_SLIDE_ANIM_DEFAULT_AXIS WIN_SLIDE_ANIM_HORIZONTAL
+#define WIN_SLIDE_ANIM_DEFAULT_TARGET_FPS 60
+#define WIN_SLIDE_ANIM_DEFAULT_DURATION_MS 200
+#define WIN_SLIDE_ANIM_DEFAULT_EASE_FUNCTION WIN_SLIDE_ANIM_EASE_IN_OUT_CUBIC
+
+int		 is_win_slide_anim_enabled(struct client *c);
+void	 win_slide_anim_start(struct client *, struct session *, struct winlink *);
+void	 win_slide_anim_start_ext(struct client *, struct winlink *, struct winlink *, enum win_slide_anim_direction);
+
 /* window-option.c */
 extern const struct window_mode window_customize_mode;
 

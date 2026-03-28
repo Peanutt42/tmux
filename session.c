@@ -418,7 +418,8 @@ session_next_alert(struct winlink *wl)
 int
 session_next(struct session *s, int alert)
 {
-	struct winlink	*wl;
+	struct winlink	*wl, *old_wl = s->curw;
+	struct client	*c;
 
 	if (s->curw == NULL)
 		return (-1);
@@ -431,6 +432,12 @@ session_next(struct session *s, int alert)
 		if (alert && ((wl = session_next_alert(wl)) == NULL))
 			return (-1);
 	}
+
+	TAILQ_FOREACH(c, &clients, entry) {
+		if (c->session == s && is_win_slide_anim_enabled(c))
+			win_slide_anim_start_ext(c, wl, old_wl, WIN_SLIDE_ANIM_RIGHT_OR_DOWN);
+	}
+
 	return (session_set_current(s, wl));
 }
 
@@ -449,7 +456,8 @@ session_previous_alert(struct winlink *wl)
 int
 session_previous(struct session *s, int alert)
 {
-	struct winlink	*wl;
+	struct winlink	*wl, *old_wl = s->curw;
+	struct client	*c = NULL;
 
 	if (s->curw == NULL)
 		return (-1);
@@ -462,6 +470,12 @@ session_previous(struct session *s, int alert)
 		if (alert && (wl = session_previous_alert(wl)) == NULL)
 			return (-1);
 	}
+
+	TAILQ_FOREACH(c, &clients, entry) {
+		if (c->session == s && is_win_slide_anim_enabled(c))
+			win_slide_anim_start_ext(c, wl, old_wl, WIN_SLIDE_ANIM_LEFT_OR_UP);
+	}
+
 	return (session_set_current(s, wl));
 }
 
@@ -479,13 +493,20 @@ session_select(struct session *s, int idx)
 int
 session_last(struct session *s)
 {
-	struct winlink	*wl;
+	struct winlink	*wl, *old_wl = s->curw;
+	struct client	*c = NULL;
 
 	wl = TAILQ_FIRST(&s->lastw);
+
 	if (wl == NULL)
 		return (-1);
 	if (wl == s->curw)
 		return (1);
+
+	TAILQ_FOREACH(c, &clients, entry) {
+		if (c->session == s && is_win_slide_anim_enabled(c))
+			win_slide_anim_start(c, s, old_wl);
+	}
 
 	return (session_set_current(s, wl));
 }
@@ -495,6 +516,7 @@ int
 session_set_current(struct session *s, struct winlink *wl)
 {
 	struct winlink	*old = s->curw;
+	struct client	*c;
 
 	if (wl == NULL)
 		return (-1);
@@ -513,6 +535,19 @@ session_set_current(struct session *s, struct winlink *wl)
 	window_update_activity(wl->window);
 	tty_update_window_offset(wl->window);
 	notify_session("session-window-changed", s);
+
+	/*
+	 * `win_slide_anim_start` call might get ignored if there is already an animation playing.
+	 * this happens when `session_next` or `session_previous` are called.
+	 * they have special intent (go right or left) that are preserved even if the motion wraps.
+	 * this intent cannot be derived from simple index comparison (example: press previous on the first window, or press next on the last window),
+	 * which is why this call then gets ignored to preserve that intent.
+	 */
+	TAILQ_FOREACH(c, &clients, entry) {
+		if (c->session == s && is_win_slide_anim_enabled(c))
+			win_slide_anim_start(c, s, old);
+	}
+
 	return (0);
 }
 

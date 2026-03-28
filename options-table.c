@@ -108,6 +108,20 @@ static const char *options_table_extended_keys_format_list[] = {
 static const char *options_table_allow_passthrough_list[] = {
 	"off", "on", "all", NULL
 };
+static const char *options_table_win_slide_anim_axis_list[] = {
+	"horizontal", "vertical", NULL
+};
+static const char *options_table_win_slide_anim_ease_function_list[] = {
+	"in-out-cubic",
+	"linear",
+	"in-out-sine",
+	"in-out-quad",
+	"in-out-quart",
+	"in-out-quint",
+	"in-out-expo",
+	"in-out-circ",
+	NULL
+};
 
 /* Status line format. */
 #define OPTIONS_TABLE_STATUS_FORMAT1 \
@@ -1561,6 +1575,50 @@ const struct options_table_entry options_table[] = {
 	  .default_num = 1,
 	  .text = "Whether xterm-style function key sequences should be sent. "
 		  "This option is no longer used."
+	},
+
+	/* window sliding animation */
+	{ .name = "window-slide-animation",
+	  .type = OPTIONS_TABLE_FLAG,
+	  .scope = OPTIONS_TABLE_SESSION,
+	  .default_num = WIN_SLIDE_ANIM_DEFAULT_ENABLED,
+	  .text = "Enable or disable window slide animation."
+	},
+
+	{ .name = "window-slide-animation-duration",
+	  .type = OPTIONS_TABLE_NUMBER,
+	  .scope = OPTIONS_TABLE_SESSION,
+	  .minimum = 0,
+	  .maximum = 5000,
+	  .default_num = WIN_SLIDE_ANIM_DEFAULT_DURATION_MS,
+	  .unit = "milliseconds",
+	  .text = "Duration of window slide animation in milliseconds."
+	},
+
+	{ .name = "window-slide-animation-axis",
+	  .type = OPTIONS_TABLE_CHOICE,
+	  .scope = OPTIONS_TABLE_SESSION,
+	  .choices = options_table_win_slide_anim_axis_list,
+	  .default_num = WIN_SLIDE_ANIM_DEFAULT_AXIS,
+	  .text = "Axis of the window slide animation."
+	},
+
+	{ .name = "window-slide-animation-target-fps",
+	  .type = OPTIONS_TABLE_NUMBER,
+	  .scope = OPTIONS_TABLE_SESSION,
+	  .minimum = 1,
+	  .maximum = 1000,
+	  .default_num = WIN_SLIDE_ANIM_DEFAULT_TARGET_FPS,
+	  .unit = "frames per second",
+	  .text = "Target frames per second for the window slide animation."
+	},
+
+	{ .name = "window-slide-animation-ease-function",
+	  .type = OPTIONS_TABLE_CHOICE,
+	  .scope = OPTIONS_TABLE_SESSION,
+	  .choices = options_table_win_slide_anim_ease_function_list,
+	  .default_num = WIN_SLIDE_ANIM_DEFAULT_EASE_FUNCTION,
+	  .text = "Easing function for window slide animation."
 	},
 
 	/* Hook options. */
