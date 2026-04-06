@@ -113,6 +113,9 @@ static void win_slide_anim_resize(__unused struct client *c, __unused void *data
 static void win_slide_anim_draw(struct client *c, void *data_ptr,
 								__unused struct screen_redraw_ctx *ctx);
 
+static void
+win_slide_anim_clear(struct tty *tty);
+
 static void win_slide_anim_draw_window(struct tty *tty, struct window *window,
 									   int draw_x_offset, int draw_y_offset);
 /*
@@ -123,9 +126,6 @@ static void win_slide_anim_draw_pane(struct tty *tty, struct window_pane *wp,
 									 u_int start_x, u_int start_y, u_int width,
 									 u_int height, u_int screen_offset_x,
 									 u_int screen_offset_y);
-
-static void win_slide_anim_draw_empty_window(struct tty *tty, int x, int y,
-											 u_int width, u_int height);
 
 /* `data_ptr` is window_slide_animation* */
 static int win_slide_anim_key(struct client *c, void *data_ptr,
@@ -336,6 +336,8 @@ win_slide_anim_draw(struct client *c, void *data_ptr,
 
 	tty_update_mode(tty, tty->mode, NULL);
 
+	win_slide_anim_clear(tty);
+
 	/* assume direction to be right/down, * (-1) for left/up */
 	switch (axis) {
 	default:
@@ -368,9 +370,6 @@ win_slide_anim_draw(struct client *c, void *data_ptr,
 	if (old_wl) {
 		win_slide_anim_draw_window(tty, old_wl->window, draw_x_offset_old,
 								   draw_y_offset_old);
-	} else {
-		win_slide_anim_draw_empty_window(tty, draw_x_offset_old, draw_y_offset_old,
-										 window_width, window_height);
 	}
 
 	win_slide_anim_draw_window(tty, new_wl->window, draw_x_offset_new,
@@ -452,40 +451,30 @@ win_slide_anim_draw_pane(struct tty *tty, struct window_pane *wp,
 	}
 }
 
+/* 
+ * clears entire tty portion of panes, borders and scrollbars,
+ * as they are not drawn in the animation
+ */
 static void
-win_slide_anim_draw_empty_window(struct tty *tty, int x, int y,
-								 u_int width, u_int height)
+win_slide_anim_clear(struct tty *tty)
 {
-	struct grid_cell	gc;
-	u_int				i = 0;
-
-	if (x >= (int)tty->sx || x + (int)width <= 0 ||
-		y >= (int)tty->sy || y + (int)height <= 0)
-	{
-		return;
-	}
+	struct session		*s = tty->client->session;
+	struct grid_cell	 gc;
+	u_int				 y = 0, max_height = tty->sy;
 
 	memcpy(&gc, &grid_default_cell, sizeof gc);
 
 	tty_attributes(tty, &gc, &gc, NULL, NULL);
 
-	if (x < 0) {
-		width -= -x;
-		x = 0;
-	}
-	if (x + (int)width > (int)tty->sx)
-		width = (int)tty->sx - x;
+	/* status at top -> start at offset */
+	if (s->statusat == 0)
+		y = s->statuslines;
+	else if (s->statusat == 1) /* status at bottom -> stop early */
+		max_height -= s->statuslines;
 
-	if (y < 0) {
-		height -= -y;
-		y = 0;
-	}
-	if (y + (int)height > (int)tty->sy)
-		height = (int)tty->sy - y;
-
-	for (; i < height; i++) {
-		tty_cursor(tty, x, y + i);
-		tty_repeat_space(tty, width);
+	for (; y < max_height; y++) {
+		tty_cursor(tty, 0, y);
+		tty_repeat_space(tty, tty->sx);
 	}
 
 	tty_reset(tty);
