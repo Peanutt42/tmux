@@ -1,7 +1,7 @@
 /* $OpenBSD$ */
 
 /*
- * Copyright (c) 2026 Peter Hennig <peterhennig@gmail.com>
+ * Copyright (c) 2026 Peter Hennig <peterhennig42@gmail.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
