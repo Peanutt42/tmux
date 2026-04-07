@@ -384,11 +384,19 @@ static void
 win_slide_anim_draw_window(struct tty *tty, struct window *window,
 						   int draw_x_offset, int draw_y_offset)
 {
+	struct session		*s = tty->client->session;
 	struct window_panes *panes = &window->panes;
 	struct window_pane	*wp = NULL;
 	int		draw_x = 0, draw_y = 0;
 	u_int	screen_offset_x = 0, screen_offset_y = 0;
 	u_int	width = 0, height = 0;
+	u_int	min_y = 0, max_y = tty->sy;
+
+	/* statusline at top */
+	if (s->statusat == 0)
+		min_y = s->statuslines;
+	else if (s->statusat == 1) /* statusline at bottom */
+		max_y = tty->sy - s->statuslines;
 
 	TAILQ_FOREACH(wp, panes, entry)
 	{
@@ -399,8 +407,8 @@ win_slide_anim_draw_window(struct tty *tty, struct window *window,
 		width = wp->sx;
 		height = wp->sy;
 
-		if (draw_x >= (int)tty->sx || draw_x + (int)wp->sx <= 0 ||
-			draw_y >= (int)tty->sy || draw_y + (int)wp->sy <= 0)
+		if (draw_x >= (int)tty->sx || draw_x + (int)width <= 0 ||
+			draw_y >= (int)max_y || draw_y + (int)height <= (int)min_y)
 		{
 			continue;
 		}
@@ -413,13 +421,13 @@ win_slide_anim_draw_window(struct tty *tty, struct window *window,
 		if (draw_x + (int)width > (int)tty->sx)
 			width = (int)tty->sx - draw_x;
 
-		if (draw_y < 0) {
-			screen_offset_y = (u_int)(-draw_y);
-			height -= screen_offset_y;
-			draw_y = 0;
+		if (draw_y < (int)min_y) {
+			screen_offset_y = (u_int)(min_y - draw_y);
+			height -= min_y - draw_y;
+			draw_y = min_y;
 		}
-		if (draw_y + (int)height > (int)tty->sy)
-			height = (int)tty->sy - draw_y;
+		if (draw_y + (int)height > (int)max_y)
+			height = (int)max_y - draw_y;
 
 		win_slide_anim_draw_pane(tty, wp, (u_int)draw_x, (u_int)draw_y, width,
 								 height, screen_offset_x, screen_offset_y);
@@ -430,9 +438,7 @@ win_slide_anim_draw_window(struct tty *tty, struct window *window,
  * `start_x`, `start_y`: tty space coords
  * `width`, `height`: area that will have the pane drawn on
  * `screen_offset_x`, screen_offset_y`: offset of the start in pane space
- * `window_height`: height of the window this pane is a part of:
- *				  = tty height - statusline_height
- *	all parameters are assumed to be all within the visible tty area
+ *	all parameters are assumed to be all within the visible tty area (excluding the statusline)
  */
 static void
 win_slide_anim_draw_pane(struct tty *tty, struct window_pane *wp,
