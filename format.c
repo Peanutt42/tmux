@@ -84,6 +84,12 @@ format_job_cmp(struct format_job *fj1, struct format_job *fj2)
 	return (strcmp(fj1->cmd, fj2->cmd));
 }
 
+/* Maimum pad and trim width. */
+#define FORMAT_MAX_WIDTH 10000
+
+/* Maimum repeat size. */
+#define FORMAT_MAX_REPEAT 10000
+
 /* Format modifiers. */
 #define FORMAT_TIMESTRING 0x1
 #define FORMAT_BASENAME 0x2
@@ -825,8 +831,8 @@ format_cb_window_layout(struct format_tree *ft)
 		return (NULL);
 
 	if (w->saved_layout_root != NULL)
-		return (layout_dump(w->saved_layout_root));
-	return (layout_dump(w->layout_root));
+		return (layout_dump(w, w->saved_layout_root));
+	return (layout_dump(w, w->layout_root));
 }
 
 /* Callback for window_visible_layout. */
@@ -838,7 +844,7 @@ format_cb_window_visible_layout(struct format_tree *ft)
 	if (w == NULL)
 		return (NULL);
 
-	return (layout_dump(w->layout_root));
+	return (layout_dump(w, w->layout_root));
 }
 
 /* Callback for pane_start_command. */
@@ -1002,6 +1008,29 @@ format_cb_pane_fg(struct format_tree *ft)
 
 	tty_default_colours(&gc, wp);
 	return (xstrdup(colour_tostring(gc.fg)));
+}
+
+/* Callback for pane_flags. */
+static void *
+format_cb_pane_flags(struct format_tree *ft)
+{
+	if (ft->wp != NULL)
+		return (xstrdup(window_pane_printable_flags(ft->wp)));
+	return (NULL);
+}
+
+/* Callback for pane_floating_flag. */
+static void *
+format_cb_pane_floating_flag(struct format_tree *ft)
+{
+	struct window_pane	*wp = ft->wp;
+
+	if (wp != NULL) {
+		if (wp->flags & PANE_FLOATING)
+			return (xstrdup("1"));
+		return (xstrdup("0"));
+	}
+	return (NULL);
 }
 
 /* Callback for pane_bg. */
@@ -1321,6 +1350,8 @@ format_cb_mouse_status_range(struct format_tree *ft)
 		return (xstrdup("session"));
 	case STYLE_RANGE_USER:
 		return (xstrdup(sr->string));
+	case STYLE_RANGE_CONTROL:
+		return (xstrdup("control"));
 	}
 	return (NULL);
 }
@@ -1605,9 +1636,13 @@ format_cb_client_user(struct format_tree *ft)
 	struct passwd	*pw;
 
 	if (ft->c != NULL) {
+		if (ft->c->user != NULL)
+			return (xstrdup(ft->c->user));
 		uid = proc_get_peer_uid(ft->c->peer);
-		if (uid != (uid_t)-1 && (pw = getpwuid(uid)) != NULL)
-			return (xstrdup(pw->pw_name));
+		if (uid != (uid_t)-1 && (pw = getpwuid(uid)) != NULL) {
+			ft->c->user = xstrdup(pw->pw_name);
+			return (xstrdup(ft->c->user));
+		}
 	}
 	return (NULL);
 }
@@ -2262,6 +2297,38 @@ format_cb_pane_pipe_pid(struct format_tree *ft)
 	return (value);
 }
 
+/* Callback for pane_pb_progress. */
+static void *
+format_cb_pane_pb_progress(struct format_tree *ft)
+{
+	char    *value = NULL;
+
+	if (ft->wp != NULL)
+		xasprintf(&value, "%d", ft->wp->base.progress_bar.progress);
+	return (value);
+}
+
+/* Callback for pane_pb_state. */
+static void *
+format_cb_pane_pb_state(struct format_tree *ft)
+{
+	if (ft->wp != NULL) {
+		switch (ft->wp->base.progress_bar.state) {
+		case PROGRESS_BAR_HIDDEN:
+			return xstrdup("hidden");
+		case PROGRESS_BAR_NORMAL:
+			return xstrdup("normal");
+		case PROGRESS_BAR_ERROR:
+			return xstrdup("error");
+		case PROGRESS_BAR_INDETERMINATE:
+			return xstrdup("indeterminate");
+		case PROGRESS_BAR_PAUSED:
+			return xstrdup("paused");
+		}
+	}
+	return (NULL);
+}
+
 /* Callback for pane_right. */
 static void *
 format_cb_pane_right(struct format_tree *ft)
@@ -2328,6 +2395,20 @@ format_cb_pane_width(struct format_tree *ft)
 {
 	if (ft->wp != NULL)
 		return (format_printf("%u", ft->wp->sx));
+	return (NULL);
+}
+
+/* Callback for pane_zoomed_flag. */
+static void *
+format_cb_pane_zoomed_flag(struct format_tree *ft)
+{
+	struct window_pane	*wp = ft->wp;
+
+	if (wp != NULL) {
+		if (wp->flags & PANE_ZOOMED)
+			return (xstrdup("1"));
+		return (xstrdup("0"));
+	}
 	return (NULL);
 }
 
@@ -3023,10 +3104,13 @@ format_cb_uid(__unused struct format_tree *ft)
 static void *
 format_cb_user(__unused struct format_tree *ft)
 {
+	static char	*cached;
 	struct passwd	*pw;
 
-	if ((pw = getpwuid(getuid())) != NULL)
-		return (xstrdup(pw->pw_name));
+	if (cached == NULL && (pw = getpwuid(getuid())) != NULL)
+		cached = xstrdup(pw->pw_name);
+	if (cached != NULL)
+		return (xstrdup(cached));
 	return (NULL);
 }
 
@@ -3310,6 +3394,12 @@ static const struct format_table_entry format_table[] = {
 	{ "pane_fg", FORMAT_TABLE_STRING,
 	  format_cb_pane_fg
 	},
+	{ "pane_flags", FORMAT_TABLE_STRING,
+	  format_cb_pane_flags
+	},
+	{ "pane_floating_flag", FORMAT_TABLE_STRING,
+	  format_cb_pane_floating_flag
+	},
 	{ "pane_format", FORMAT_TABLE_STRING,
 	  format_cb_pane_format
 	},
@@ -3348,6 +3438,12 @@ static const struct format_table_entry format_table[] = {
 	},
 	{ "pane_path", FORMAT_TABLE_STRING,
 	  format_cb_pane_path
+	},
+	{ "pane_pb_progress", FORMAT_TABLE_STRING,
+	  format_cb_pane_pb_progress
+	},
+	{ "pane_pb_state", FORMAT_TABLE_STRING,
+	  format_cb_pane_pb_state
 	},
 	{ "pane_pid", FORMAT_TABLE_STRING,
 	  format_cb_pane_pid
@@ -3390,6 +3486,9 @@ static const struct format_table_entry format_table[] = {
 	},
 	{ "pane_width", FORMAT_TABLE_STRING,
 	  format_cb_pane_width
+	},
+	{ "pane_zoomed_flag", FORMAT_TABLE_STRING,
+	  format_cb_pane_zoomed_flag
 	},
 	{ "pid", FORMAT_TABLE_STRING,
 	  format_cb_pid
@@ -4207,6 +4306,8 @@ format_build_modifiers(struct format_expand_state *es, const char **s,
 		/* Skip any separator character. */
 		if (*cp == ';')
 			cp++;
+		if (*cp == '\0')
+			break;
 
 		/* Check single character modifiers with no arguments. */
 		if (strchr("labcdnwETSWPL!<>", cp[0]) != NULL &&
@@ -4767,7 +4868,7 @@ format_replace_expression(struct format_modifier *mexp,
 
 	/* The third argument may be precision. */
 	if (argc >= 3) {
-		prec = strtonum(mexp->argv[2], INT_MIN, INT_MAX, &errstr);
+		prec = strtonum(mexp->argv[2], INT_MIN + 1, INT_MAX, &errstr);
 		if (errstr != NULL) {
 			format_log(es, "expression precision %s: %s", errstr,
 			    mexp->argv[2]);
@@ -4912,8 +5013,8 @@ format_replace(struct format_expand_state *es, const char *key, size_t keylen,
 			case '=':
 				if (fm->argc < 1)
 					break;
-				limit = strtonum(fm->argv[0], INT_MIN, INT_MAX,
-				    &errstr);
+				limit = strtonum(fm->argv[0], -FORMAT_MAX_WIDTH,
+				    FORMAT_MAX_WIDTH, &errstr);
 				if (errstr != NULL)
 					limit = 0;
 				if (fm->argc >= 2 && fm->argv[1] != NULL)
@@ -4922,8 +5023,8 @@ format_replace(struct format_expand_state *es, const char *key, size_t keylen,
 			case 'p':
 				if (fm->argc < 1)
 					break;
-				width = strtonum(fm->argv[0], INT_MIN, INT_MAX,
-				    &errstr);
+				width = strtonum(fm->argv[0], -FORMAT_MAX_WIDTH,
+				    FORMAT_MAX_WIDTH, &errstr);
 				if (errstr != NULL)
 					width = 0;
 				break;
@@ -5146,7 +5247,7 @@ format_replace(struct format_expand_state *es, const char *key, size_t keylen,
 			format_log(es, "repeat syntax error: %s", copy);
 			goto fail;
 		}
-		nrep = strtonum(right, 1, 10000, &errstr);
+		nrep = strtonum(right, 1, FORMAT_MAX_REPEAT, &errstr);
 		if (errstr != NULL)
 			value = xstrdup("");
 		else {
@@ -5341,6 +5442,7 @@ done:
 		if (marker != NULL && strcmp(new, value) != 0) {
 			free(value);
 			xasprintf(&value, "%s%s", new, marker);
+			free(new);
 		} else {
 			free(value);
 			value = new;
@@ -5351,6 +5453,7 @@ done:
 		if (marker != NULL && strcmp(new, value) != 0) {
 			free(value);
 			xasprintf(&value, "%s%s", marker, new);
+			free(new);
 		} else {
 			free(value);
 			value = new;
@@ -5463,7 +5566,7 @@ format_expand1(struct format_expand_state *es, const char *fmt)
 			buf[off++] = *fmt++;
 			continue;
 		}
-		if (*fmt++ == '\0')
+		if (*++fmt == '\0')
 			break;
 
 		ch = (u_char)*fmt++;
