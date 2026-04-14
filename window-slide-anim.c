@@ -400,6 +400,9 @@ win_slide_anim_draw_window(struct tty *tty, struct window *window,
 
 	TAILQ_FOREACH(wp, panes, entry)
 	{
+		if ((window->flags & WINDOW_ZOOMED) && (window->active != wp))
+			continue;
+
 		draw_x = wp->xoff + draw_x_offset;
 		draw_y = wp->yoff + draw_y_offset;
 		screen_offset_x = 0;
